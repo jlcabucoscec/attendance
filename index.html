@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Attendance & Scores Checker</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      background: #1e1e1e;
+      font-family: Arial, sans-serif;
+      color: white;
+    }
+    .container {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+      height: 90vh;
+      padding: 10px;
+    }
+    .box {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      padding: 10px;
+      height: 100%;
+      box-shadow: 0 0 10px rgba(0,0,0,0.5);
+    }
+    .box h2 {
+      margin: 0 0 5px 0;
+      font-size: 1.2em;
+      font-weight: bold;
+      text-align: center;
+      border-bottom: 2px solid rgba(255,255,255,0.2);
+      padding-bottom: 4px;
+    }
+    textarea {
+        flex: 1;
+        resize: none;
+        border: none;
+        outline: none;
+        background: repeating-linear-gradient(rgba(255,255,255,0.05), rgba(255,255,255,0.05) 22px, transparent 23px);
+        color: #fff;
+        font-family: monospace;
+        font-size: 14px;
+        line-height: 22px;
+        padding: 6px;
+        border-bottom: 1px solid rgba(255,255,255,0.3);
+        border-radius: 8px;
+    }
+    pre {
+      display: flex;
+      overflow-y: auto;
+      background: transparent;
+      color: white;
+      font-size: 14px;
+      font-family: monospace;
+      border-top: 1px solid rgba(255,255,255,0.2);
+      margin: 0;
+      padding: 5px;
+      white-space: pre;
+    }
+    button {
+      margin-bottom: 5px;
+      padding: 5px 10px;
+      border: none;
+      border-radius: 6px;
+      background: #444;
+      color: white;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.1s ease;
+    }
+    button:active {
+      transform: scale(0.95);
+      background: #666;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Master List -->
+    <div class="box">
+      <h2>Master List</h2>
+      <textarea id="masterList" placeholder="Enter surnames (one per line)..."></textarea>
+    </div>
+
+    <!-- Present List -->
+    <div class="box">
+      <h2>Present List</h2>
+      <button onclick="checkAttendance()">Check Attendance</button>
+      <small>Format: SURNAME SCORE1 SCORE2 ...</small>
+      <textarea id="presentList" placeholder="Enter present students with scores..."></textarea>
+    </div>
+
+    <!-- Absent List -->
+    <div class="box">
+      <h2>Absent List</h2>
+      <button onclick="copyAbsent()">Copy Absent</button>
+      <pre id="absentList"></pre>
+    </div>
+
+    <!-- Attendance Excel -->
+    <div class="box">
+      <h2>Attendance Excel</h2>
+      <button onclick="copyAttendance()">Copy Attendance</button>
+      <pre id="attendanceExcel"></pre>
+    </div>
+
+    <!-- Score Excel -->
+    <div class="box">
+      <h2>Score Excel</h2>
+      <button onclick="nextScore()">Next Score List</button>
+      <button onclick="copyScores()">Copy Scores</button>
+      <pre id="scoreExcel"></pre>
+    </div>
+  </div>
+
+  <script>
+    let scoreIndex = 1; // index of which score to display
+
+    function checkAttendance() {
+      const master = document.getElementById('masterList').value.trim().split(/\n+/).map(s => s.trim().toUpperCase()).filter(s=>s);
+      const presentRaw = document.getElementById('presentList').value.trim().split(/\n+/).filter(s=>s);
+      const presentMap = {};
+       
+      presentRaw.forEach(line => {
+        const parts = line.trim().split(/\s+/);
+        const surname = parts[0].toUpperCase();
+        const given = (parts[1] || "").toUpperCase(); // optional first name / part
+        const scores = parts.slice(1);
+
+        // Try to find match in master list
+        let match = master.find(m => {
+            // surname must match
+            if (!m.startsWith(surname)) return false;
+            // if a given name is provided, check if it appears in master entry
+            if (given && !m.includes(given)) return false;
+            return true;
+        });
+
+        if (match) {
+            presentMap[match] = scores;
+        } else {
+            // fallback: use surname only (if unique in master)
+            const matches = master.filter(m => m.startsWith(surname));
+            if (matches.length === 1) {
+            presentMap[matches[0]] = scores;
+            }
+        }
+        });
+
+
+      let absent = [];
+      let attendanceOutput = [];
+      let scoreOutput = [];
+
+      master.forEach(name => {
+        if (presentMap[name]) {
+          attendanceOutput.push(name.padEnd(30) + "1");
+        } else {
+          attendanceOutput.push(name.padEnd(30) + "0");
+          absent.push(name);
+        }
+      });
+
+      document.getElementById('absentList').textContent = absent.join("\n");
+      document.getElementById('attendanceExcel').textContent = attendanceOutput.join("\n");
+      renderScores();
+    }
+
+    function renderScores() {
+      const master = document.getElementById('masterList').value.trim().split(/\n+/).map(s => s.trim().toUpperCase()).filter(s=>s);
+      const presentRaw = document.getElementById('presentList').value.trim().split(/\n+/).filter(s=>s);
+      
+      const presentMap = {};
+        
+      presentRaw.forEach(line => {
+        const parts = line.trim().split(/\s+/);
+        const surname = parts[0].toUpperCase();
+        const given = (parts[1] || "").toUpperCase(); 
+        const scores = parts.slice(1).filter(p => /^\d+$/.test(p));
+
+
+        // Try to find match in master list
+        let match = master.find(m => {
+            // surname must match
+            if (!m.startsWith(surname)) return false;
+            // if a given name is provided, check if it appears in master entry
+            if (given && !m.includes(given)) return false;
+            return true;
+        });
+
+        if (match) {
+            presentMap[match] = scores;
+        } else {
+            // fallback: use surname only (if unique in master)
+            const matches = master.filter(m => m.startsWith(surname));
+            if (matches.length === 1) {
+            presentMap[matches[0]] = scores;
+            }
+        }
+        });
+
+
+      let scoreOutput = [];
+      master.forEach(name => {
+        if (presentMap[name]) {
+          let scores = presentMap[name];
+          let value = scores[scoreIndex-1] || "0";
+          scoreOutput.push(name.padEnd(30) + value);
+        } else {
+          scoreOutput.push(name.padEnd(30) + "0");
+        }
+      });
+      document.getElementById('scoreExcel').textContent = scoreOutput.join("\n");
+    }
+
+    function nextScore() {
+      const presentRaw = document.getElementById('presentList').value.trim().split(/\n+/).filter(s=>s);
+      let maxScores = 0;
+      presentRaw.forEach(line => {
+        const parts = line.trim().split(/\s+/);
+        maxScores = Math.max(maxScores, parts.length - 1);
+      });
+      if (maxScores === 0) return;
+      scoreIndex++;
+      if (scoreIndex > maxScores) scoreIndex = 1;
+      renderScores();
+    }
+
+    function copyAbsent() {
+      navigator.clipboard.writeText(document.getElementById('absentList').textContent);
+    }
+
+    function copyAttendance() {
+      navigator.clipboard.writeText(document.getElementById('attendanceExcel').textContent);
+    }
+
+    function copyScores() {
+      navigator.clipboard.writeText(document.getElementById('scoreExcel').textContent);
+    }
+  </script>
+</body>
+</html>
