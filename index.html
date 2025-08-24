@@ -240,12 +240,19 @@
     }
 
     function copyAttendance() {
-      navigator.clipboard.writeText(document.getElementById('attendanceExcel').textContent);
+      const lines = document.getElementById('attendanceExcel').textContent.trim().split("\n");
+      // keep only the last "word" (0 or 1)
+      const numbersOnly = lines.map(line => line.trim().split(/\s+/).pop()).join("\n");
+      navigator.clipboard.writeText(numbersOnly);
+    }
+    
+    function copyScores() {
+      const lines = document.getElementById('scoreExcel').textContent.trim().split("\n");
+      // keep only the last "word" (the score)
+      const numbersOnly = lines.map(line => line.trim().split(/\s+/).pop()).join("\n");
+      navigator.clipboard.writeText(numbersOnly);
     }
 
-    function copyScores() {
-      navigator.clipboard.writeText(document.getElementById('scoreExcel').textContent);
-    }
   </script>
 </body>
 </html>
