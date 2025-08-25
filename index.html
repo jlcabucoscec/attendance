@@ -81,6 +81,28 @@
       transform: scale(0.95);
       background: #666;
     }
+    #suggestions {
+      position: absolute;
+      top: 100%;   /* directly below the textarea */
+      left: 0;
+      right: 0;
+      background: white;
+      border: 1px solid #ccc;
+      max-height: 150px;
+      overflow-y: auto;
+      display: none;   /* hidden until suggestions exist */
+      z-index: 1000;   /* ensure it floats above */
+    }
+    
+    #suggestions div {
+      padding: 5px;
+      cursor: pointer;
+    }
+    
+    #suggestions div:hover {
+      background: #eee;
+    }
+
   </style>
 </head>
 <body>
@@ -96,7 +118,11 @@
       <h2>Present List</h2>
       <button onclick="checkAttendance()">Check Attendance</button>
       <small>Format: SURNAME SCORE1 SCORE2 ...</small>
-      <textarea id="presentList" placeholder="Enter present students with scores..."></textarea>
+      <div style="position: relative; display: inline-block; width: 100%;">
+        <textarea id="presentList" rows="10" cols="30" placeholder="Enter Present Students"></textarea>
+        <div id="suggestions"></div>
+      </div>
+
     </div>
 
     <!-- Absent List -->
@@ -124,32 +150,100 @@
 
   <script>
     let scoreIndex = 1; // index of which score to display
+    
+    function normalizeName(name) {
+      return name.toUpperCase().replace(/Ñ/g, "N").trim();
+    }
 
+    // Attach instant suggestions (trigger on typing)
+    document.getElementById("presentList").addEventListener("input", function(e) {
+      const master = document.getElementById("masterList").value
+        .trim()
+        .split(/\n+/)
+        .map(s => normalizeName(s))
+        .filter(s => s);
+    
+      const text = this.value.trim().split(/\n/).pop(); // last line only
+      const parts = text.split(/\s+/);
+      const surname = normalizeName(parts[0] || "");
+      if (!surname) {
+        document.getElementById("suggestions").style.display = "none";
+        return;
+      }
+    
+      // find matches from master list
+      const matches = master.filter(m => normalizeName(m).includes(surname)).slice(0, 5);
+    
+      const suggBox = document.getElementById("suggestions");
+      suggBox.innerHTML = matches.map(m => `<div class="sugg-item" style="padding:4px; cursor:pointer;">${m}</div>`).join("");
+      suggBox.style.display = matches.length ? "block" : "none";
+    
+      // allow click to auto-fill
+      document.querySelectorAll("#suggestions .sugg-item").forEach(item => {
+        item.addEventListener("click", () => {
+          // replace last line in textarea with chosen suggestion
+          let lines = document.getElementById("presentList").value.trim().split(/\n/);
+          lines[lines.length-1] = item.textContent + " "; // leave space for score input
+          document.getElementById("presentList").value = lines.join("\n") + " ";
+          suggBox.style.display = "none";
+          document.getElementById("presentList").focus();
+        });
+      });
+    });
+
+    document.getElementById("presentList").addEventListener("keydown", function(e) {
+      const suggBox = document.getElementById("suggestions");
+      if (suggBox.style.display === "block" && (e.key === "Tab" || e.key === "Enter")) {
+        e.preventDefault();
+        const first = suggBox.querySelector(".sugg-item");
+        if (first) {
+          let lines = this.value.trim().split(/\n/);
+          lines[lines.length-1] = first.textContent + " ";
+          this.value = lines.join("\n") + " ";
+          suggBox.style.display = "none";
+        }
+      }
+    });
+
+
+    
     function checkAttendance() {
-      const master = document.getElementById('masterList').value.trim().split(/\n+/).map(s => s.trim().toUpperCase()).filter(s=>s);
+      const master = document.getElementById('masterList').value
+        .trim()
+        .split(/\n+/)
+        .map(s => normalizeName(s))
+        .filter(s => s);
+
       const presentRaw = document.getElementById('presentList').value.trim().split(/\n+/).filter(s=>s);
       const presentMap = {};
        
       presentRaw.forEach(line => {
         const parts = line.trim().split(/\s+/);
-        const surname = parts[0].toUpperCase();
-        const given = (parts[1] || "").toUpperCase(); // optional first name / part
+        const surname = normalizeName(parts[0]);
+        const given = normalizeName(parts[1] || "");
+
         const scores = parts.slice(1);
 
         // Try to find match in master list
-        let match = master.find(m => {
-            // surname must match
-            if (!m.startsWith(surname)) return false;
-            // if a given name is provided, check if it appears in master entry
-            if (given && !m.includes(given)) return false;
-            return true;
-        });
+       let match = master.find(m => {
+          const [mSurname, ...rest] = m.split(",")[0].trim().split(/\s+/);
+          const mGiven = m.split(",")[1] ? m.split(",")[1].trim() : "";
+      
+          if (normalizeName(mSurname) !== normalizeName(surname)) return false;
+          if (given && !normalizeName(m).includes(normalizeName(given))) return false;
+          return true;
+      });
+
 
         if (match) {
             presentMap[match] = scores;
         } else {
             // fallback: use surname only (if unique in master)
-            const matches = master.filter(m => m.startsWith(surname));
+            const matches = master.filter(m => {
+              const [mSurname] = m.split(",")[0].trim().split(/\s+/);
+              return normalizeName(mSurname) === normalizeName(surname);
+            });
+
             if (matches.length === 1) {
             presentMap[matches[0]] = scores;
             }
@@ -176,32 +270,44 @@
     }
 
     function renderScores() {
-      const master = document.getElementById('masterList').value.trim().split(/\n+/).map(s => s.trim().toUpperCase()).filter(s=>s);
+      const master = document.getElementById('masterList').value
+        .trim()
+        .split(/\n+/)
+        .map(s => normalizeName(s))
+        .filter(s => s);
+
       const presentRaw = document.getElementById('presentList').value.trim().split(/\n+/).filter(s=>s);
       
       const presentMap = {};
         
       presentRaw.forEach(line => {
         const parts = line.trim().split(/\s+/);
-        const surname = parts[0].toUpperCase();
-        const given = (parts[1] || "").toUpperCase(); 
+        const surname = normalizeName(parts[0]);
+        const given = normalizeName(parts[1] || "");
+
         const scores = parts.slice(1).filter(p => /^\d+(\.\d+)?$/.test(p));
 
 
         // Try to find match in master list
-        let match = master.find(m => {
-            // surname must match
-            if (!m.startsWith(surname)) return false;
-            // if a given name is provided, check if it appears in master entry
-            if (given && !m.includes(given)) return false;
-            return true;
-        });
+       let match = master.find(m => {
+          const [mSurname, ...rest] = m.split(",")[0].trim().split(/\s+/);
+          const mGiven = m.split(",")[1] ? m.split(",")[1].trim() : "";
+      
+          if (normalizeName(mSurname) !== normalizeName(surname)) return false;
+          if (given && !normalizeName(m).includes(normalizeName(given))) return false;
+          return true;
+      });
+      
 
         if (match) {
             presentMap[match] = scores;
         } else {
             // fallback: use surname only (if unique in master)
-            const matches = master.filter(m => m.startsWith(surname));
+            const matches = master.filter(m => {
+              const [mSurname] = m.split(",")[0].trim().split(/\s+/);
+              return normalizeName(mSurname) === normalizeName(surname);
+            });
+
             if (matches.length === 1) {
             presentMap[matches[0]] = scores;
             }
